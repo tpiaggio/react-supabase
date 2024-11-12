@@ -12,8 +12,11 @@ function App() {
     name: "",
     code: "",
     continent: "",
+    image: null,
   });
   const [searchQuery, setSearchQuery] = useState("");
+  const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
 
   const handleChange = (e) => {
     setCountry({...country, [e.target.name]: e.target.value});
@@ -21,9 +24,21 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const {data, error} = await supabase
+    let image_url = null;
+    if (country.image) {
+      const {data, error} = await supabase.storage
+        .from("images")
+        .upload(country.name, country.image);
+      if (error) {
+        console.error("Error uploading image:", error);
+      } else {
+        image_url = data.path;
+      }
+      delete country.image;
+    }
+    const {error} = await supabase
       .from("countries")
-      .insert(country)
+      .insert({...country, image_url})
       .select("*");
     if (error) console.log("error", error);
     setSearchQuery("");
@@ -56,8 +71,31 @@ function App() {
     setCountries(data);
   };
 
+  const handleMessage = async (e) => {
+    e.preventDefault();
+    const {data, error} = await supabase.functions.invoke("hello-world", {
+      body: {name: name},
+    });
+    setMessage(data.message);
+  };
+
   return (
     <>
+      <h3>Say Hi!</h3>
+      <form>
+        <div>
+          <label htmlFor="name">Message:</label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <button onClick={handleMessage}>Say Hi</button>
+      </form>
+      {message && <p>{message}</p>}
       <h3>Create a Country</h3>
       <form>
         <div>
@@ -90,6 +128,15 @@ function App() {
             onChange={handleChange}
           />
         </div>
+        <div>
+          <label htmlFor="image">Image:</label>
+          <input
+            type="file"
+            id="image"
+            name="image"
+            onChange={(e) => setCountry({...country, image: e.target.files[0]})}
+          />
+        </div>
         <button onClick={handleSubmit}>Create Country</button>
       </form>
       <h3>Countries</h3>
@@ -106,11 +153,16 @@ function App() {
       </form>
       <ul>
         {countries.map((country) => (
-          <>
-            <li key={country.name}>
-              {country.name} | {country.code} | {country.continent}
-            </li>
-          </>
+          <li key={country.name}>
+            {country.image_url && (
+              <img
+                src={`https://chkqmcqzbtcninwptkfz.supabase.co/storage/v1/object/public/images/${country.image_url}`}
+                alt={country.name}
+                height={20}
+              />
+            )}
+            {country.name} | {country.code} | {country.continent}
+          </li>
         ))}
       </ul>
       <button onClick={() => supabase.auth.signOut()}>Sign out</button>
